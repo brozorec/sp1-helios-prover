@@ -2,6 +2,8 @@ use std::ops::Deref;
 
 use ssz_rs::prelude::*;
 
+pub use ssz_rs::prelude::Vector;
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ByteVector<const N: usize> {
     inner: Vector<u8, N>,
@@ -268,6 +270,7 @@ impl serde::Serialize for U64 {
 }
 
 pub type Bytes32 = ByteVector<32>;
+pub type BLSPubKey = ByteVector<48>;
 
 #[derive(serde::Deserialize, serde::Serialize, Debug, Clone, Default, SimpleSerialize)]
 pub struct Header {
@@ -276,4 +279,10 @@ pub struct Header {
     pub parent_root: Bytes32,
     pub state_root: Bytes32,
     pub body_root: Bytes32,
+}
+
+#[derive(Debug, Clone, Default, SimpleSerialize, serde::Deserialize, serde::Serialize)]
+pub struct SyncCommittee {
+    pub pubkeys: Vector<BLSPubKey, 512>,
+    pub aggregate_pubkey: BLSPubKey,
 }

@@ -12,7 +12,7 @@ use helios::{
     },
     prelude::*,
 };
-use helios_prover_primitives::types::{Bytes32, Header, U64};
+use helios_prover_primitives::types::{BLSPubKey, Bytes32, Header, SyncCommittee, U64, Vector};
 use sp1_core::{utils::setup_tracer, SP1Prover, SP1Stdin, SP1Verifier};
 use std::sync::Arc;
 use tokio::sync::{mpsc::channel, watch};
@@ -98,6 +98,21 @@ fn to_header(h: consensus::types::Header) -> Header {
     }
 }
 
+fn to_committee(c: consensus::types::SyncCommittee) -> SyncCommittee {
+    let pubkeys: Vec<BLSPubKey> = c
+        .pubkeys
+        .to_vec()
+        .iter()
+        .map(|k| BLSPubKey::try_from(k.as_slice()).unwrap())
+        .collect();
+
+    let aggregate_pubkey: BLSPubKey = BLSPubKey::try_from(c.aggregate_pubkey.as_slice()).unwrap();
+    SyncCommittee {
+        pubkeys: Vector::try_from(pubkeys).unwrap(),
+        aggregate_pubkey,
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     setup_tracer();
@@ -116,10 +131,18 @@ async fn main() -> Result<()> {
         .collect();
 
     let finalized_header = to_header(update.finalized_header);
+    let next_committee = to_committee(update.next_sync_committee);
+    let next_sync_committee_branch: Vec<Bytes32> = update
+        .next_sync_committee_branch
+        .iter()
+        .map(|v| Bytes32::try_from(v.as_slice()).unwrap())
+        .collect();
 
     stdin.write(&attested_header);
     stdin.write(&finality_branch);
     stdin.write(&finalized_header);
+    stdin.write(&next_committee);
+    stdin.write(&next_sync_committee_branch);
 
     let mut proof = SP1Prover::prove(ELF, stdin).expect("proving failed");
     //SP1Prover::execute(ELF, stdin).expect("execute failed");
