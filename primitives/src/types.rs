@@ -2,7 +2,7 @@ use std::ops::Deref;
 
 use ssz_rs::prelude::*;
 
-pub use ssz_rs::prelude::Vector;
+pub use ssz_rs::prelude::{Vector, Bitvector};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ByteVector<const N: usize> {
@@ -271,8 +271,9 @@ impl serde::Serialize for U64 {
 
 pub type Bytes32 = ByteVector<32>;
 pub type BLSPubKey = ByteVector<48>;
+pub type SignatureBytes = ByteVector<96>;
 
-#[derive(serde::Deserialize, serde::Serialize, Debug, Clone, Default, SimpleSerialize)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Default, SimpleSerialize)]
 pub struct Header {
     pub slot: U64,
     pub proposer_index: U64,
@@ -281,8 +282,20 @@ pub struct Header {
     pub body_root: Bytes32,
 }
 
-#[derive(Debug, Clone, Default, SimpleSerialize, serde::Deserialize, serde::Serialize)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Default, SimpleSerialize)]
 pub struct SyncCommittee {
     pub pubkeys: Vector<BLSPubKey, 512>,
     pub aggregate_pubkey: BLSPubKey,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Default, SimpleSerialize)]
+pub struct SyncAggregate {
+    pub sync_committee_bits: Bitvector<512>,
+    pub sync_committee_signature: SignatureBytes,
+}
+
+#[derive(SimpleSerialize, Default, Debug)]
+pub struct SigningData {
+    pub object_root: Bytes32,
+    pub domain: Bytes32,
 }

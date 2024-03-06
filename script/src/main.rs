@@ -7,13 +7,16 @@ use helios::{
     consensus::{
         self, constants,
         rpc::{nimbus_rpc::NimbusRpc, ConsensusRpc},
-        types::Update,
+        types::{Bootstrap, Update},
         utils, Inner,
     },
     prelude::*,
 };
-use helios_prover_primitives::types::{BLSPubKey, Bytes32, Header, SyncCommittee, U64, Vector};
+use helios_prover_primitives::types::{
+    BLSPubKey, Bytes32, Header, SignatureBytes, SyncAggregate, SyncCommittee, Vector, U64,
+};
 use sp1_core::{utils::setup_tracer, SP1Prover, SP1Stdin, SP1Verifier};
+//use ssz_rs::Merkleized;
 use std::sync::Arc;
 use tokio::sync::{mpsc::channel, watch};
 
@@ -38,7 +41,7 @@ async fn get_latest_checkpoint() -> H256 {
     mainnet_checkpoint
 }
 
-async fn get_update() -> Update {
+async fn get_client(checkpoint: Vec<u8>) -> Inner<NimbusRpc> {
     let consensus_rpc = "https://www.lightclientdata.org";
 
     let base_config = networks::mainnet();
@@ -53,8 +56,8 @@ async fn get_update() -> Update {
         ..Default::default()
     };
 
-    let check = get_latest_checkpoint().await;
-    let checkpoint = check.as_bytes().to_vec();
+    //let check = get_latest_checkpoint().await;
+    //let checkpoint = check.as_bytes().to_vec();
     //let checkpoint =
     //hex::decode("60b0473910c8236cdd467f5115ea612f65dd71e052533a60f3864eee0702aaf0").unwrap();
 
@@ -62,7 +65,7 @@ async fn get_update() -> Update {
     let (finalized_block_send, _) = watch::channel(None);
     let (channel_send, _) = watch::channel(None);
 
-    let mut inner = Inner::<NimbusRpc>::new(
+    let mut client = Inner::<NimbusRpc>::new(
         //"testdata/",
         consensus_rpc,
         block_send,
@@ -72,18 +75,25 @@ async fn get_update() -> Update {
     );
 
     //only sync when verifying finallity
-    //inner.sync(&checkpoint).await.unwrap();
-    inner.bootstrap(&checkpoint).await.unwrap();
+    //client.sync(&checkpoint).await.unwrap();
+    client.bootstrap(&checkpoint).await.unwrap();
+    client
+}
 
-    let period = utils::calc_sync_period(inner.store.finalized_header.slot.into());
-    let updates = inner
+async fn get_bootstrap(client: &Inner<NimbusRpc>, checkpoint: &[u8]) -> Bootstrap {
+    client.rpc.get_bootstrap(checkpoint).await.unwrap()
+}
+
+async fn get_update(client: &Inner<NimbusRpc>) -> Update {
+    let period = utils::calc_sync_period(client.store.finalized_header.slot.into());
+    let updates = client
         .rpc
         .get_updates(period, constants::MAX_REQUEST_LIGHT_CLIENT_UPDATES)
         .await
         .unwrap();
 
-    //let update = updates[0].clone();
-    //inner.verify_update(&update).unwrap();
+    let update = updates[0].clone();
+    client.verify_update(&update).unwrap();
     //update
     updates[0].clone()
 }
@@ -113,6 +123,20 @@ fn to_committee(c: consensus::types::SyncCommittee) -> SyncCommittee {
     }
 }
 
+fn to_branch(v: Vec<consensus::types::Bytes32>) -> Vec<Bytes32> {
+    v.iter()
+        .map(|v| Bytes32::try_from(v.as_slice()).unwrap())
+        .collect()
+}
+
+fn to_sync_agg(sa: consensus::types::SyncAggregate) -> SyncAggregate {
+    SyncAggregate {
+        sync_committee_bits: sa.sync_committee_bits,
+        sync_committee_signature: SignatureBytes::try_from(sa.sync_committee_signature.as_slice())
+            .unwrap(),
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     setup_tracer();
@@ -120,39 +144,46 @@ async fn main() -> Result<()> {
     // Generate proof.
     let mut stdin = SP1Stdin::new();
 
-    let update = get_update().await;
+    let checkpoint = get_latest_checkpoint().await;
+    let client = get_client(checkpoint.as_bytes().to_vec()).await;
+    let bootstrap = get_bootstrap(&client, checkpoint.as_bytes()).await;
+    let update = get_update(&client).await;
 
-    let attested_header = to_header(update.attested_header);
+    let attested_header = to_header(update.attested_header.clone());
 
-    let finality_branch: Vec<Bytes32> = update
-        .finality_branch
-        .iter()
-        .map(|v| Bytes32::try_from(v.as_slice()).unwrap())
-        .collect();
+    let finality_branch = to_branch(update.finality_branch);
 
     let finalized_header = to_header(update.finalized_header);
+    let current_sync_committee = to_committee(bootstrap.current_sync_committee);
+    let current_sync_committee_branch = to_branch(bootstrap.current_sync_committee_branch);
     let next_committee = to_committee(update.next_sync_committee);
-    let next_sync_committee_branch: Vec<Bytes32> = update
-        .next_sync_committee_branch
-        .iter()
-        .map(|v| Bytes32::try_from(v.as_slice()).unwrap())
-        .collect();
+    let next_sync_committee_branch = to_branch(update.next_sync_committee_branch);
+    let sync_aggregate = to_sync_agg(update.sync_aggregate);
+
+    //let hash_tree_root = update.attested_header.clone().hash_tree_root();
+    //let header_root = consensus::types::Bytes32::try_from(hash_tree_root?.as_ref())?;
+    //let signing_root = client.compute_committee_sign_root(header_root, update.signature_slot.into())?;
 
     stdin.write(&attested_header);
     stdin.write(&finality_branch);
     stdin.write(&finalized_header);
+    stdin.write(&current_sync_committee);
+    stdin.write(&current_sync_committee_branch);
     stdin.write(&next_committee);
     stdin.write(&next_sync_committee_branch);
+    stdin.write(&sync_aggregate);
 
-    let mut proof = SP1Prover::prove(ELF, stdin).expect("proving failed");
-    //SP1Prover::execute(ELF, stdin).expect("execute failed");
-
-    // Read output.
-    let valid = proof.stdout.read::<bool>();
+    //let mut proof = SP1Prover::prove(ELF, stdin).expect("proving failed");
+    let mut out = SP1Prover::execute(ELF, stdin).expect("execute failed");
+    let valid = out.read::<bool>();
     println!("valid: {}", valid);
 
+    // Read output.
+    //let valid = proof.stdout.read::<bool>();
+    //println!("valid: {}", valid);
+
     // Verify proof.
-    SP1Verifier::verify(ELF, &proof).expect("verification failed");
+    //SP1Verifier::verify(ELF, &proof).expect("verification failed");
 
     //// Save proof.
     //proof
