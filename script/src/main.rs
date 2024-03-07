@@ -1,12 +1,8 @@
 //! A simple script to generate and verify the proof of a given program.
 
-/*use dusk_bls12_381::G1Affine;*/
-/*use dusk_bytes::Serializable;*/
-/*use bls12_381_bls::{PublicKey, APK, Signature};*/
 use ethers::types::H256;
 use eyre::Result;
 use helios::{
-    //config::networks::Network,
     consensus::{
         self, constants,
         rpc::{nimbus_rpc::NimbusRpc, ConsensusRpc},
@@ -16,15 +12,11 @@ use helios::{
     prelude::*,
 };
 use helios_prover_primitives::types::{
-    BLSPubKey, Bytes32, Header, SignatureBytes, SyncAggregate, SyncCommittee, Vector, U64, SigningData,
+    BLSPubKey, Bytes32, Header, SignatureBytes, SyncAggregate, SyncCommittee, Vector, U64,
 };
-use milagro_bls::{AggregateSignature, PublicKey};
 use sp1_core::{utils::setup_tracer, SP1Prover, SP1Stdin, SP1Verifier};
-/*use ssz_rs::Bitvector;*/
-//use ssz_rs::Merkleized;
 use std::sync::Arc;
 use tokio::sync::{mpsc::channel, watch};
-use ssz_rs::{Bitvector, Merkleized, Node};
 
 const ELF: &[u8] = include_bytes!("../../program/elf/riscv32im-succinct-zkvm-elf");
 
@@ -98,8 +90,8 @@ async fn get_update(client: &Inner<NimbusRpc>) -> Update {
         .await
         .unwrap();
 
-    let update = updates[0].clone();
-    client.verify_update(&update).unwrap();
+    /*let update = updates[0].clone();*/
+    //client.verify_update(&update).unwrap();
     //update
     updates[0].clone()
 }
@@ -143,52 +135,6 @@ fn to_sync_agg(sa: consensus::types::SyncAggregate) -> SyncAggregate {
     }
 }
 
-fn get_participating_keys(
-    committee: &SyncCommittee,
-    bitfield: &Bitvector<512>,
-) -> Result<Vec<PublicKey>> {
-    let mut pks: Vec<PublicKey> = Vec::new();
-    bitfield.iter().enumerate().for_each(|(i, bit)| {
-        if bit == true {
-            let pk = &committee.pubkeys[i];
-            let pk = PublicKey::from_bytes_unchecked(pk).unwrap();
-            pks.push(pk);
-            //unsafe {
-                //let pk = PublicKey::from_slice_unchecked(pk.as_slice());
-                //pks.push(pk);
-            //}
-        }
-    });
-
-    Ok(pks)
-}
-
-fn get_committee_sign_root(header: Bytes32) -> Result<Node> {
-    //let genesis_root: [u8; 32] = [
-        //75, 54, 61, 185, 78, 40, 97, 32, 215, 110, 185, 5, 52, 15, 221, 78, 84, 191, 233, 240, 107,
-        //243, 63, 246, 207, 90, 210, 127, 81, 27, 254, 149,
-    //];
-    //let fork_version: [u8; 4] = [3, 0, 0, 0];
-    let domain: &[u8] = &[
-        7, 0, 0, 0, 187, 164, 218, 150, 53, 76, 159, 37, 71, 108, 241, 188, 105, 191, 88, 58, 127,
-        158, 10, 240, 73, 48, 91, 98, 222, 103, 102, 64,
-    ];
-    let mut data = SigningData {
-        object_root: header,
-        domain: Bytes32::try_from(domain).unwrap(),
-    };
-    Ok(data.hash_tree_root()?)
-}
-
-pub fn is_aggregate_valid(sig_bytes: &SignatureBytes, msg: &[u8], pks: &[&PublicKey]) -> bool {
-    let sig_res = AggregateSignature::from_bytes(sig_bytes);
-    match sig_res {
-        Ok(sig) => sig.fast_aggregate_verify(msg, pks),
-        Err(_) => false,
-    }
-}
-
-
 #[tokio::main]
 async fn main() -> Result<()> {
     setup_tracer();
@@ -211,25 +157,6 @@ async fn main() -> Result<()> {
     let next_committee = to_committee(update.next_sync_committee);
     let next_sync_committee_branch = to_branch(update.next_sync_committee_branch);
     let sync_aggregate = to_sync_agg(update.sync_aggregate);
-
-    //let hash_tree_root = update.attested_header.clone().hash_tree_root();
-    //let header_root = consensus::types::Bytes32::try_from(hash_tree_root?.as_ref())?;
-    //let signing_root = client.compute_committee_sign_root(header_root, update.signature_slot.into())?;
-
-    let hash_tree_root: Node = attested_header.clone().hash_tree_root().unwrap();
-    let header_root = Bytes32::try_from(hash_tree_root.as_ref()).unwrap();
-    let signing_root = get_committee_sign_root(header_root).unwrap();
-    let pks = get_participating_keys(&current_sync_committee, &sync_aggregate.sync_committee_bits)
-        .unwrap();
-    let signature = sync_aggregate.clone().sync_committee_signature;
-    let valid = is_aggregate_valid(&signature, signing_root.as_ref(), &pks.iter().collect::<Vec<&PublicKey>>());
-    println!("valid agg: {}", valid);
-
-    /*let mut apk = APK::from(&pks[0]);*/
-    /*apk.aggregate(&pks[1..]);*/
-    /*let s: &[u8; 48] = signature.as_slice().try_into().unwrap();*/
-    /*let sig = Signature::from_bytes(s).unwrap();*/
-    /*let valid = apk.verify(&sig, &signing_root.as_ref()).is_ok();*/
 
     stdin.write(&attested_header);
     stdin.write(&finality_branch);
