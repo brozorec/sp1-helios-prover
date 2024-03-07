@@ -5,13 +5,14 @@ sp1_zkvm::entrypoint!(main);
 
 mod helpers;
 
-use bls12_381_bls::Signature;
-use dusk_bytes::Serializable;
+//use bls12_381_bls::Signature;
+//use dusk_bytes::Serializable;
 use eyre::Result;
-use helios_prover_primitives::types::{Bytes32, Header, SyncAggregate, SyncCommittee, SigningData};
+use helios_prover_primitives::types::{Bytes32, Header, SigningData, SyncAggregate, SyncCommittee, SignatureBytes};
 use helpers::utils::is_proof_valid;
+use milagro_bls::{AggregateSignature, PublicKey};
 
-use bls12_381_bls::{PublicKey, APK};
+//use bls12_381_bls::{PublicKey, APK};
 use ssz_rs::{Bitvector, Merkleized, Node};
 
 fn get_participating_keys(
@@ -22,10 +23,12 @@ fn get_participating_keys(
     bitfield.iter().enumerate().for_each(|(i, bit)| {
         if bit == true {
             let pk = &committee.pubkeys[i];
-            unsafe {
-                let pk = PublicKey::from_slice_unchecked(pk.as_slice());
-                pks.push(pk);
-            }
+            let pk = PublicKey::from_bytes_unchecked(pk).unwrap();
+            pks.push(pk);
+            //unsafe {
+                //let pk = PublicKey::from_slice_unchecked(pk.as_slice());
+                //pks.push(pk);
+            //}
         }
     });
 
@@ -34,8 +37,8 @@ fn get_participating_keys(
 
 fn get_committee_sign_root(header: Bytes32) -> Result<Node> {
     //let genesis_root: [u8; 32] = [
-        //75, 54, 61, 185, 78, 40, 97, 32, 215, 110, 185, 5, 52, 15, 221, 78, 84, 191, 233, 240, 107,
-        //243, 63, 246, 207, 90, 210, 127, 81, 27, 254, 149,
+    //75, 54, 61, 185, 78, 40, 97, 32, 215, 110, 185, 5, 52, 15, 221, 78, 84, 191, 233, 240, 107,
+    //243, 63, 246, 207, 90, 210, 127, 81, 27, 254, 149,
     //];
     //let fork_version: [u8; 4] = [3, 0, 0, 0];
     let domain: &[u8] = &[
@@ -48,6 +51,15 @@ fn get_committee_sign_root(header: Bytes32) -> Result<Node> {
     };
     Ok(data.hash_tree_root()?)
 }
+
+pub fn is_aggregate_valid(sig_bytes: &SignatureBytes, msg: &[u8], pks: &[&PublicKey]) -> bool {
+    let sig_res = AggregateSignature::from_bytes(sig_bytes);
+    match sig_res {
+        Ok(sig) => sig.fast_aggregate_verify(msg, pks),
+        Err(_) => false,
+    }
+}
+
 
 fn main() {
     let attested_header = sp1_zkvm::io::read::<Header>();
@@ -62,14 +74,17 @@ fn main() {
     let hash_tree_root: Node = attested_header.clone().hash_tree_root().unwrap();
     let header_root = Bytes32::try_from(hash_tree_root.as_ref()).unwrap();
     let signing_root = get_committee_sign_root(header_root).unwrap();
-    let pks = get_participating_keys(&current_sync_committee, &sync_aggregate.sync_committee_bits).unwrap();
+    let pks = get_participating_keys(&current_sync_committee, &sync_aggregate.sync_committee_bits)
+        .unwrap();
     let signature = sync_aggregate.sync_committee_signature;
 
-    let mut apk = APK::from(&pks[0]);
-    apk.aggregate(&pks[1..]);
-    let s: &[u8; 48] = signature.as_slice().try_into().unwrap();
-    let sig = Signature::from_bytes(s).unwrap();
-    let valid = apk.verify(&sig, &signing_root.as_ref()).is_ok();
+    let valid = is_aggregate_valid(&signature, signing_root.as_ref(), &pks.iter().collect::<Vec<&PublicKey>>());
+
+    //let mut apk = APK::from(&pks[0]);
+    //apk.aggregate(&pks[1..]);
+    //let s: &[u8; 48] = signature.as_slice().try_into().unwrap();
+    //let sig = Signature::from_bytes(s).unwrap();
+    //let valid = apk.verify(&sig, &signing_root.as_ref()).is_ok();
 
     //let is_valid_sig = self.verify_sync_committee_signture(
     //&pks,
@@ -79,23 +94,23 @@ fn main() {
     //);
 
     //let mut valid = is_proof_valid(
-        //&attested_header,
-        //&mut finalized_header,
-        //&finality_branch,
-        //6,
-        //41,
+    //&attested_header,
+    //&mut finalized_header,
+    //&finality_branch,
+    //6,
+    //41,
     //);
 
     //// TODO: curent committee
 
     //valid = valid
-        //&& is_proof_valid(
-            //&attested_header,
-            //&mut next_committee,
-            //&next_sync_committee_branch,
-            //5,
-            //23,
-        //);
+    //&& is_proof_valid(
+    //&attested_header,
+    //&mut next_committee,
+    //&next_sync_committee_branch,
+    //5,
+    //23,
+    //);
 
     sp1_zkvm::io::write(&valid);
 }
