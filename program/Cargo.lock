@@ -686,6 +686,7 @@ dependencies = [
  "serde_with",
  "sha2 0.9.8",
  "snowbridge-milagro-bls",
+ "sp1-derive",
  "sp1-zkvm",
  "ssz_rs",
 ]
@@ -1407,9 +1408,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "sp1-derive"
+version = "0.1.0"
+source = "git+https://github.com/succinctlabs/sp1.git#34bdc598d9507e1f7208471d8434a11a8b9e22c8"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
 name = "sp1-precompiles"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/sp1.git#aaf765deff685159c1eb7a8530b4c97cb6a3882b"
+source = "git+https://github.com/succinctlabs/sp1.git#34bdc598d9507e1f7208471d8434a11a8b9e22c8"
 dependencies = [
  "anyhow",
  "bincode",
@@ -1423,13 +1434,13 @@ dependencies = [
 [[package]]
 name = "sp1-zkvm"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/sp1.git#aaf765deff685159c1eb7a8530b4c97cb6a3882b"
+source = "git+https://github.com/succinctlabs/sp1.git#34bdc598d9507e1f7208471d8434a11a8b9e22c8"
 dependencies = [
- "anyhow",
  "bincode",
  "cfg-if",
  "getrandom",
  "k256",
+ "libm",
  "rand",
  "serde",
  "sp1-precompiles",

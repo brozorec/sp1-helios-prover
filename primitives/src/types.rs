@@ -271,6 +271,7 @@ impl serde::Serialize for U64 {
 
 pub type Bytes32 = ByteVector<32>;
 pub type BLSPubKey = ByteVector<48>;
+pub type BLSPubKeyUncompressed = ByteVector<96>;
 pub type SignatureBytes = ByteVector<96>;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Default, SimpleSerialize)]
