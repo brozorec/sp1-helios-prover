@@ -8,8 +8,7 @@ edition = "2021"
 sp1-zkvm = { git = "https://github.com/succinctlabs/sp1.git" }
 sp1-derive = { git = "https://github.com/succinctlabs/sp1.git" }
 helios-prover-primitives = { path = "../primitives/" }
-#milagro_bls = { package = "snowbridge-milagro-bls", path = "../../milagro_bls" }
-milagro_bls = { package = "snowbridge-milagro-bls", git = "https://github.com/Snowfork/milagro_bls", rev = "6a95c9e33c6a41d9137761e593d53742ebb964de" }
+milagro_bls = { package = "snowbridge-milagro-bls", path = "../../milagro_bls" }
 hex-literal = "0.4.1"
 eyre = "0.6.8"
 sha2 = "0.9.8"
