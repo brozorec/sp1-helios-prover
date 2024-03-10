@@ -64,16 +64,16 @@ pub fn get_participating_keys(
     bitfield: &Bitvector<512>,
 ) -> Result<Vec<PublicKey>> {
     let mut pks: Vec<PublicKey> = Vec::new();
+    println!("cycle-tracker-start: utils:init_keys");
     bitfield.iter().enumerate().for_each(|(i, bit)| {
         if bit == true && i < 5 {
-            //println!("cycle-tracker-start: init_keys");
             let pk = &committee.pubkeys[i];
             let pk = PublicKey::from_bytes_unchecked(pk).unwrap();
             pks.push(pk);
-            //println!("cycle-tracker-end: init_keys");
         }
     });
 
+    println!("cycle-tracker-end: utils:init_keys");
     Ok(pks)
 }
 
@@ -95,9 +95,9 @@ pub fn get_committee_sign_root(header: Bytes32) -> Result<Node> {
 }
 
 pub fn is_aggregate_valid(sig_bytes: &SignatureBytes, msg: &[u8], pks: &[&PublicKey]) -> bool {
-    println!("cycle-tracker-start: is_aggregate_valid");
+    println!("cycle-tracker-start: utils:aggregate_sig_init");
     let sig_res = AggregateSignature::from_bytes(sig_bytes);
-    println!("cycle-tracker-end: is_aggregate_valid");
+    println!("cycle-tracker-end: utils:aggregate_sig_init");
     match sig_res {
         Ok(sig) => sig.fast_aggregate_verify(msg, pks),
         Err(_) => false,
