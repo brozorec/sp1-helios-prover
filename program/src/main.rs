@@ -34,11 +34,13 @@ fn main() {
     let signature = sync_aggregate.sync_committee_signature;
 
     //let valid = true;
-    let mut valid = is_aggregate_valid(
+    println!("cycle-tracker-start: main:is_aggregate_valid");
+    let valid = is_aggregate_valid(
         &signature,
         signing_root.as_ref(),
         &pks.iter().collect::<Vec<&PublicKey>>(),
     );
+    println!("cycle-tracker-end: main:is_aggregate_valid");
 
     //println!("cycle-tracker-start: finalized_header");
     //valid = valid
